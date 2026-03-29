@@ -1,0 +1,1110 @@
+#' @title Plot Item Characteristic Curves (ICC) from exametrika
+#'
+#' @description
+#' This function takes exametrika IRT output as input and generates
+#' Item Characteristic Curves (ICC) using ggplot2. ICC shows the probability
+#' of a correct response as a function of ability (theta).
+#'
+#' @param data An object of class \code{c("exametrika", "IRT")} from
+#'   \code{exametrika::IRT()}.
+#' @param items Numeric vector specifying which items to plot.
+#'   If \code{NULL} (default), all items are plotted.
+#' @param xvariable A numeric vector of length 2 specifying the range of the
+#'   x-axis (ability). Default is \code{c(-4, 4)}.
+#' @param title Logical or character. If \code{TRUE} (default), display an
+#'   auto-generated title. If \code{FALSE}, no title. If a character string,
+#'   use it as a custom title (only for single-item plots).
+#' @param colors Character vector. Color(s) for the curve.
+#'   If \code{NULL} (default), a colorblind-friendly palette is used.
+#' @param linetype Character or numeric specifying the line type.
+#'   Default is \code{"solid"}.
+#' @param show_legend Logical. If \code{TRUE}, display the legend.
+#'   Default is \code{FALSE}.
+#' @param legend_position Character. Position of the legend.
+#'   One of \code{"right"} (default), \code{"top"}, \code{"bottom"},
+#'   \code{"left"}, \code{"none"}.
+#'
+#' @return A list of ggplot objects, one for each item. Each plot shows the
+#'   Item Characteristic Curve for that item.
+#'
+#' @details
+#' The function supports 2PL, 3PL, and 4PL IRT models:
+#' \itemize{
+#'   \item 2PL: slope (a) and location (b) parameters
+#'   \item 3PL: adds lower asymptote (c) parameter
+#'   \item 4PL: adds upper asymptote (d) parameter
+#' }
+#'
+#' The ICC is computed using the four-parameter logistic model:
+#' \deqn{P(\theta) = c + \frac{d - c}{1 + \exp(-a(\theta - b))}}
+#'
+#' @examplesIf requireNamespace("exametrika", quietly = TRUE)
+#' library(exametrika)
+#' result <- IRT(J15S500, model = 3)
+#' plots <- plotICC_gg(result)
+#' plots[[1]] # Show ICC for the first item
+#' combinePlots_gg(plots, selectPlots = 1:6) # Show first 6 items
+#'
+#' @seealso \code{\link{plotIIC_gg}}, \code{\link{plotTIC_gg}}
+#'
+#' @importFrom ggplot2 ggplot
+#' @importFrom ggplot2 xlim
+#' @importFrom ggplot2 ylim
+#' @importFrom ggplot2 stat_function
+#' @importFrom ggplot2 labs theme
+#' @export
+
+
+plotICC_gg <- function(data,
+                       items = NULL,
+                       xvariable = c(-4, 4),
+                       title = TRUE,
+                       colors = NULL,
+                       linetype = "solid",
+                       show_legend = FALSE,
+                       legend_position = "right") {
+  if (!all(class(data) %in% c("exametrika", "IRT"))) {
+    stop("Invalid input. The variable must be from exametrika output or an output from IRT.")
+  }
+
+  Item_Characteristic_function <- function(x, slope = 1, location, lowerAsym = 0, upperAsym = 1) {
+    lowerAsym + ((upperAsym - lowerAsym) / (1 + exp(-1 * slope * (x - location))))
+  }
+
+  n_params <- ncol(data$params)
+
+  if (n_params < 2 || n_params > 4) {
+    stop("Invalid number of parameters.")
+  }
+
+  n_items <- nrow(data$params)
+  if (is.null(items)) {
+    items <- 1:n_items
+  }
+  if (any(items < 1 | items > n_items)) {
+    stop("'items' must contain values between 1 and ", n_items)
+  }
+
+  # Color setup
+  if (is.null(colors)) {
+    use_color <- .gg_exametrika_palette(1)[1]
+  } else {
+    use_color <- colors[1]
+  }
+
+  plots <- list()
+
+  for (idx in seq_along(items)) {
+    i <- items[idx]
+    args <- c(slope = data$params$slope[i], location = data$params$location[i])
+    if (n_params == 3) {
+      args["lowerAsym"] <- data$params$lowerAsym[i]
+    }
+    if (n_params == 4) {
+      args["upperAsym"] <- data$params$upperAsym[i]
+    }
+
+    # Title setup
+    if (is.logical(title) && title) {
+      plot_title <- paste0("Item Characteristic Curve, ", rownames(data$params)[i])
+    } else if (is.logical(title) && !title) {
+      plot_title <- NULL
+    } else {
+      plot_title <- title
+    }
+
+    p <- ggplot(data = data.frame(x = xvariable)) +
+      xlim(xvariable[1], xvariable[2]) +
+      scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25)) +
+      stat_function(
+        fun = Item_Characteristic_function, args = args,
+        color = use_color, linetype = linetype
+      ) +
+      labs(
+        title = plot_title,
+        x = "ability",
+        y = "probability"
+      )
+
+    # Legend control
+    if (!show_legend) {
+      p <- p + theme(legend.position = "none")
+    } else {
+      p <- p + theme(legend.position = legend_position)
+    }
+
+    plots[[idx]] <- p
+  }
+
+  return(plots)
+}
+
+
+#' @title Four-Parameter Logistic Model
+#'
+#' @description
+#' Computes the probability of a correct response using the four-parameter
+#' logistic model (4PLM) in Item Response Theory.
+#'
+#' @param x Numeric. The ability parameter (theta).
+#' @param a Numeric. The slope (discrimination) parameter. Default is 1.
+#' @param b Numeric. The location (difficulty) parameter.
+#' @param c Numeric. The lower asymptote (guessing) parameter. Default is 0.
+#' @param d Numeric. The upper asymptote (carelessness) parameter. Default is 1.
+#'
+#' @return A numeric value representing the probability of a correct response.
+#'
+#' @details
+#' The four-parameter logistic model extends the 3PLM by adding an upper
+#' asymptote parameter \code{d}, which accounts for careless errors by
+#' high-ability examinees.
+#'
+#' The model formula is:
+#' \deqn{P(\theta) = c + \frac{d - c}{1 + \exp(-a(\theta - b))}}
+#'
+#' Special cases:
+#' \itemize{
+#'   \item 1PLM: \code{a = 1}, \code{c = 0}, \code{d = 1}
+#'   \item 2PLM: \code{c = 0}, \code{d = 1}
+#'   \item 3PLM: \code{d = 1}
+#' }
+#'
+#' @examples
+#' # Compute probability for ability = 0, difficulty = 0
+#' LogisticModel(x = 0, a = 1, b = 0, c = 0, d = 1) # Returns 0.5
+#'
+#' # 3PLM with guessing parameter
+#' LogisticModel(x = -3, a = 1.5, b = 0, c = 0.2, d = 1)
+#'
+#' @seealso \code{\link{ItemInformationFunc}}
+#'
+#' @export
+
+LogisticModel <- function(x, a = 1, b, c = 0, d = 1) {
+  p <- c + ((d - c) / (1 + exp(-a * (x - b))))
+  return(p)
+}
+
+#' @title Item Information Function for 4PLM
+#'
+#' @description
+#' Computes the Item Information Function (IIF) for the four-parameter
+#' logistic model in Item Response Theory. The information function indicates
+#' how precisely an item measures ability at different theta levels.
+#'
+#' @param x Numeric. The ability parameter (theta).
+#' @param a Numeric. The slope (discrimination) parameter. Default is 1.
+#' @param b Numeric. The location (difficulty) parameter.
+#' @param c Numeric. The lower asymptote (guessing) parameter. Default is 0.
+#' @param d Numeric. The upper asymptote (carelessness) parameter. Default is 1.
+#'
+#' @return A numeric value representing the item information at the given
+#'   ability level.
+#'
+#' @details
+#' Higher discrimination (\code{a}) parameters result in higher information.
+#' Items provide maximum information near their difficulty (\code{b}) parameter.
+#' The guessing (\code{c}) and upper asymptote (\code{d}) parameters reduce
+#' the maximum information an item can provide.
+#'
+#' @examples
+#' # Information at ability = 0 for an item with b = 0
+#' ItemInformationFunc(x = 0, a = 1.5, b = 0, c = 0, d = 1)
+#'
+#' # Compare information at different ability levels
+#' sapply(seq(-3, 3, 0.5), function(x) ItemInformationFunc(x, a = 1, b = 0))
+#'
+#' @seealso \code{\link{LogisticModel}}
+#'
+#' @export
+
+ItemInformationFunc <- function(x, a = 1, b, c = 0, d = 1) {
+  numerator <- a^2 * (LogisticModel(x, a, b, c, d) - c) * (d - LogisticModel(x, a, b, c, d)) *
+    (LogisticModel(x, a, b, c, d) * (c + d - LogisticModel(x, a, b, c, d)) - c * d)
+  denominator <- (d - c)^2 * LogisticModel(x, a, b, c, d) * (1 - LogisticModel(x, a, b, c, d))
+  tmp <- numerator / denominator
+  return(tmp)
+}
+
+
+#' @title Plot Item Information Curves (IIC) from exametrika
+#'
+#' @description
+#' This function takes exametrika IRT or GRM output as input and generates
+#' Item Information Curves (IIC) using ggplot2. IIC shows how much
+#' information each item provides at different ability levels.
+#'
+#' @param data An object of class \code{c("exametrika", "IRT")} from
+#'   \code{exametrika::IRT()} or \code{c("exametrika", "GRM")} from
+#'   \code{exametrika::GRM()}.
+#' @param items Numeric vector specifying which items to plot.
+#'   If \code{NULL} (default), all items are plotted.
+#' @param xvariable A numeric vector of length 2 specifying the range of the
+#'   x-axis (ability). Default is \code{c(-4, 4)}.
+#' @param title Logical or character. If \code{TRUE} (default), display an
+#'   auto-generated title. If \code{FALSE}, no title. If a character string,
+#'   use it as a custom title (only for single-item plots).
+#' @param colors Character vector of colors. For IRT, single color for the curve.
+#'   If \code{NULL} (default), a colorblind-friendly palette is used.
+#' @param linetype Character or numeric specifying the line type.
+#'   Default is \code{"solid"}.
+#' @param show_legend Logical. If \code{TRUE}, display the legend (mainly for GRM).
+#'   Default is \code{FALSE}.
+#' @param legend_position Character. Position of the legend.
+#'   One of \code{"right"} (default), \code{"top"}, \code{"bottom"},
+#'   \code{"left"}, \code{"none"}.
+#'
+#' @return A list of ggplot objects, one for each item. Each plot shows the
+#'   Item Information Curve for that item.
+#'
+#' @details
+#' The Item Information Function indicates how precisely an item measures
+#' ability at each point on the theta scale. Items with higher discrimination
+#' parameters provide more information. The peak of the information curve
+#' occurs near the item's difficulty parameter.
+#'
+#' For IRT models (2PL, 3PL, 4PL), the function uses the standard IRT
+#' information function. For GRM, the information is computed as:
+#' \deqn{I(\theta) = a^2 \sum_{k=1}^{K-1} P_k^*(\theta) [1 - P_k^*(\theta)]}
+#'
+#' @examplesIf requireNamespace("exametrika", quietly = TRUE)
+#' library(exametrika)
+#' \donttest{
+#' # IRT example
+#' result_irt <- IRT(J15S500, model = 3)
+#' plots_irt <- plotIIC_gg(result_irt)
+#' plots_irt[[1]] # Show IIC for the first item
+#'
+#' # GRM example
+#' result_grm <- GRM(J5S1000)
+#' plots_grm <- plotIIC_gg(result_grm)
+#' plots_grm[[1]] # Show IIC for the first item
+#' }
+#'
+#' @seealso \code{\link{plotICC_gg}}, \code{\link{plotTIC_gg}}, \code{\link{plotICRF_gg}}
+#'
+#' @importFrom ggplot2 ggplot aes geom_line
+#' @importFrom ggplot2 xlim
+#' @importFrom ggplot2 ylim
+#' @importFrom ggplot2 stat_function
+#' @importFrom ggplot2 labs theme
+#' @export
+
+
+plotIIC_gg <- function(data,
+                       items = NULL,
+                       xvariable = c(-4, 4),
+                       title = TRUE,
+                       colors = NULL,
+                       linetype = "solid",
+                       show_legend = FALSE,
+                       legend_position = "right") {
+  # Check model type
+  is_IRT <- all(class(data) %in% c("exametrika", "IRT"))
+  is_GRM <- all(class(data) %in% c("exametrika", "GRM"))
+
+  if (!is_IRT && !is_GRM) {
+    stop("Invalid input. The variable must be from exametrika output (IRT or GRM).")
+  }
+
+  # === IRT Model ===
+  if (is_IRT) {
+    ItemInformationFunc <- function(x, a = 1, b, c = 0, d = 1) {
+      numerator <- a^2 * (LogisticModel(x, a, b, c, d) - c) * (d - LogisticModel(x, a, b, c, d)) *
+        (LogisticModel(x, a, b, c, d) * (c + d - LogisticModel(x, a, b, c, d)) - c * d)
+      denominator <- (d - c)^2 * LogisticModel(x, a, b, c, d) * (1 - LogisticModel(x, a, b, c, d))
+      tmp <- numerator / denominator
+      return(tmp)
+    }
+
+    n_params <- ncol(data$params)
+    if (n_params < 2 || n_params > 4) {
+      stop("Invalid number of parameters.")
+    }
+
+    n_items <- nrow(data$params)
+    if (is.null(items)) {
+      items <- 1:n_items
+    }
+    if (any(items < 1 | items > n_items)) {
+      stop("'items' must contain values between 1 and ", n_items)
+    }
+
+    # Color setup
+    if (is.null(colors)) {
+      use_color <- .gg_exametrika_palette(1)[1]
+    } else {
+      use_color <- colors[1]
+    }
+
+    plots <- list()
+
+    for (idx in seq_along(items)) {
+      i <- items[idx]
+      args <- c(a = data$params$slope[i], b = data$params$location[i])
+      if (n_params == 3) {
+        args["c"] <- data$params$lowerAsym[i]
+      }
+      if (n_params == 4) {
+        args["d"] <- data$params$upperAsym[i]
+      }
+
+      # Title setup
+      if (is.logical(title) && title) {
+        plot_title <- paste0("Item Information Curve, ", rownames(data$params)[i])
+      } else if (is.logical(title) && !title) {
+        plot_title <- NULL
+      } else {
+        plot_title <- title
+      }
+
+      p <- ggplot(data = data.frame(x = xvariable)) +
+        xlim(xvariable[1], xvariable[2]) +
+        stat_function(fun = ItemInformationFunc, args = args, color = use_color, linetype = linetype) +
+        labs(
+          title = plot_title,
+          x = "ability",
+          y = "information"
+        )
+
+      # Legend control (generally not needed for IRT)
+      if (!show_legend) {
+        p <- p + theme(legend.position = "none")
+      } else {
+        p <- p + theme(legend.position = legend_position)
+      }
+
+      plots[[idx]] <- p
+    }
+
+    return(plots)
+  }
+
+  # === GRM Model ===
+  if (is_GRM) {
+    params <- data$params
+    n_items <- nrow(params)
+
+    if (is.null(items)) {
+      items <- 1:n_items
+    }
+    if (any(items < 1 | items > n_items)) {
+      stop("'items' must contain values between 1 and ", n_items)
+    }
+
+    # Color setup
+    if (is.null(colors)) {
+      use_color <- .gg_exametrika_palette(1)[1]
+    } else {
+      use_color <- colors[1]
+    }
+
+    thetas <- seq(xvariable[1], xvariable[2], length.out = 501)
+    plots <- list()
+
+    for (idx in seq_along(items)) {
+      i <- items[idx]
+      a <- params[i, 1]
+      b <- as.numeric(params[i, -1])
+      b <- b[!is.na(b)]
+
+      # Compute GRM Item Information
+      info_values <- sapply(thetas, function(theta) {
+        ItemInformationFunc_GRM(theta, a, b)
+      })
+
+      plot_data <- data.frame(
+        theta = thetas,
+        information = info_values
+      )
+
+      # Title setup
+      if (is.logical(title) && title) {
+        plot_title <- paste("Item Information Curve,", rownames(params)[i])
+      } else if (is.logical(title) && !title) {
+        plot_title <- NULL
+      } else {
+        plot_title <- title
+      }
+
+      p <- ggplot(plot_data, aes(x = theta, y = information)) +
+        geom_line(color = use_color, linetype = linetype) +
+        labs(
+          title = plot_title,
+          x = "ability",
+          y = "information"
+        )
+
+      # Legend control
+      if (!show_legend) {
+        p <- p + theme(legend.position = "none")
+      } else {
+        p <- p + theme(legend.position = legend_position)
+      }
+
+      plots[[idx]] <- p
+    }
+
+    return(plots)
+  }
+}
+
+#' @title Plot Test Information Curve (TIC) from exametrika
+#'
+#' @description
+#' This function takes exametrika IRT or GRM output as input and generates a
+#' Test Information Curve (TIC) using ggplot2. TIC shows the total
+#' information provided by all items at each ability level.
+#'
+#' @param data An object of class \code{c("exametrika", "IRT")} from
+#'   \code{exametrika::IRT()} or \code{c("exametrika", "GRM")} from
+#'   \code{exametrika::GRM()}.
+#' @param xvariable A numeric vector of length 2 specifying the range of the
+#'   x-axis (ability). Default is \code{c(-4, 4)}.
+#' @param title Logical or character. If \code{TRUE} (default), display an
+#'   auto-generated title. If \code{FALSE}, no title. If a character string,
+#'   use it as a custom title.
+#' @param colors Character vector. Color(s) for the curve.
+#'   If \code{NULL} (default), a colorblind-friendly palette is used.
+#' @param linetype Character or numeric specifying the line type.
+#'   Default is \code{"solid"}.
+#' @param show_legend Logical. If \code{TRUE}, display the legend.
+#'   Default is \code{FALSE}.
+#' @param legend_position Character. Position of the legend.
+#'   One of \code{"right"} (default), \code{"top"}, \code{"bottom"},
+#'   \code{"left"}, \code{"none"}.
+#'
+#' @return A single ggplot object showing the Test Information Curve.
+#'
+#' @details
+#' The Test Information Function is the sum of all Item Information Functions.
+#' It indicates how precisely the test as a whole measures ability at each
+#' point on the theta scale. The reciprocal of test information is
+#' approximately equal to the squared standard error of measurement.
+#'
+#' The function supports IRT models (2PL, 3PL, 4PL) and GRM.
+#'
+#' @examplesIf requireNamespace("exametrika", quietly = TRUE)
+#' library(exametrika)
+#' \donttest{
+#' # IRT example
+#' result_irt <- IRT(J15S500, model = 3)
+#' plot_irt <- plotTIC_gg(result_irt)
+#' plot_irt # Show Test Information Curve
+#'
+#' # GRM example
+#' result_grm <- GRM(J5S1000)
+#' plot_grm <- plotTIC_gg(result_grm)
+#' plot_grm # Show Test Information Curve
+#' }
+#'
+#' @seealso \code{\link{plotICC_gg}}, \code{\link{plotIIC_gg}}, \code{\link{plotICRF_gg}}
+#'
+#' @importFrom ggplot2 ggplot aes geom_line
+#' @importFrom ggplot2 xlim
+#' @importFrom ggplot2 ylim
+#' @importFrom ggplot2 stat_function
+#' @importFrom ggplot2 labs
+#' @export
+
+
+plotTIC_gg <- function(data,
+                       xvariable = c(-4, 4),
+                       title = TRUE,
+                       colors = NULL,
+                       linetype = "solid",
+                       show_legend = FALSE,
+                       legend_position = "right") {
+  # Check model type
+  is_IRT <- all(class(data) %in% c("exametrika", "IRT"))
+  is_GRM <- all(class(data) %in% c("exametrika", "GRM"))
+
+  if (!is_IRT && !is_GRM) {
+    stop("Invalid input. The variable must be from exametrika output (IRT or GRM).")
+  }
+
+  # Color setup
+  if (is.null(colors)) {
+    use_color <- .gg_exametrika_palette(1)[1]
+  } else {
+    use_color <- colors[1]
+  }
+
+  # Title setup
+  if (is.logical(title) && title) {
+    plot_title <- "Test Information Curve"
+  } else if (is.logical(title) && !title) {
+    plot_title <- NULL
+  } else {
+    plot_title <- title
+  }
+
+  # === IRT Model ===
+  if (is_IRT) {
+    n_params <- ncol(data$params)
+
+    if (n_params < 2 || n_params > 4) {
+      stop("Invalid number of parameters.")
+    }
+
+    multi <- function(x) {
+      total <- 0
+      for (i in 1:nrow(data$params)) {
+        total <- total + ItemInformationFunc(
+          x,
+          data$params[i, 1], # slope
+          data$params[i, 2], # location
+          ifelse(is.null(data$params[i, 3]), 0, data$params[i, 3]), # lower
+          ifelse(is.null(data$params[i, 4]), 1, data$params[i, 4]) # upper
+        )
+      }
+      return(total)
+    }
+
+    plot <- ggplot(data = data.frame(x = xvariable)) +
+      xlim(xvariable[1], xvariable[2]) +
+      stat_function(fun = multi, color = use_color, linetype = linetype) +
+      labs(
+        title = plot_title,
+        x = "ability",
+        y = "information"
+      )
+
+    # Legend control
+    if (!show_legend) {
+      plot <- plot + theme(legend.position = "none")
+    } else {
+      plot <- plot + theme(legend.position = legend_position)
+    }
+
+    return(plot)
+  }
+
+  # === GRM Model ===
+  if (is_GRM) {
+    params <- data$params
+    n_items <- nrow(params)
+
+    thetas <- seq(xvariable[1], xvariable[2], length.out = 501)
+
+    # Sum information across all items
+    total_info <- numeric(length(thetas))
+
+    for (i in 1:n_items) {
+      a <- params[i, 1]
+      b <- as.numeric(params[i, -1])
+      b <- b[!is.na(b)]
+
+      item_info <- sapply(thetas, function(theta) {
+        ItemInformationFunc_GRM(theta, a, b)
+      })
+
+      total_info <- total_info + item_info
+    }
+
+    plot_data <- data.frame(
+      theta = thetas,
+      information = total_info
+    )
+
+    plot <- ggplot(plot_data, aes(x = theta, y = information)) +
+      geom_line(color = use_color, linetype = linetype) +
+      labs(
+        title = plot_title,
+        x = "ability",
+        y = "information"
+      )
+
+    # Legend control
+    if (!show_legend) {
+      plot <- plot + theme(legend.position = "none")
+    } else {
+      plot <- plot + theme(legend.position = legend_position)
+    }
+
+    return(plot)
+  }
+}
+
+#' @title Plot Test Response Function (TRF) from exametrika
+#'
+#' @description
+#' This function takes exametrika IRT output as input and generates a
+#' Test Response Function (TRF) using ggplot2. TRF shows the expected
+#' total score as a function of ability (theta).
+#'
+#' @param data An object of class \code{c("exametrika", "IRT")} from
+#'   \code{exametrika::IRT()}.
+#' @param xvariable A numeric vector of length 2 specifying the range of the
+#'   x-axis (ability). Default is \code{c(-4, 4)}.
+#' @param title Logical or character. If \code{TRUE} (default), display an
+#'   auto-generated title. If \code{FALSE}, no title. If a character string,
+#'   use it as a custom title.
+#' @param colors Character vector. Color(s) for the curve.
+#'   If \code{NULL} (default), a colorblind-friendly palette is used.
+#' @param linetype Character or numeric specifying the line type.
+#'   Default is \code{"solid"}.
+#' @param show_legend Logical. If \code{TRUE}, display the legend.
+#'   Default is \code{FALSE}.
+#' @param legend_position Character. Position of the legend.
+#'   One of \code{"right"} (default), \code{"top"}, \code{"bottom"},
+#'   \code{"left"}, \code{"none"}.
+#'
+#' @return A single ggplot object showing the Test Response Function.
+#'
+#' @details
+#' The Test Response Function is the sum of all Item Characteristic Curves
+#' (ICCs). At each ability level, TRF represents the expected number of
+#' correct responses across all items. For a test with \eqn{J} items:
+#' \deqn{TRF(\theta) = \sum_{j=1}^{J} P_j(\theta)}
+#'
+#' The y-axis ranges from 0 to the total number of items.
+#' The function supports 2PL, 3PL, and 4PL IRT models.
+#'
+#' @examplesIf requireNamespace("exametrika", quietly = TRUE)
+#' library(exametrika)
+#' result <- IRT(J15S500, model = 3)
+#' plot <- plotTRF_gg(result)
+#' plot # Show Test Response Function
+#'
+#' @seealso \code{\link{plotICC_gg}}, \code{\link{plotTIC_gg}}
+#'
+#' @importFrom ggplot2 ggplot
+#' @importFrom ggplot2 xlim
+#' @importFrom ggplot2 ylim
+#' @importFrom ggplot2 stat_function
+#' @importFrom ggplot2 labs theme
+#' @export
+
+
+plotTRF_gg <- function(data,
+                       xvariable = c(-4, 4),
+                       title = TRUE,
+                       colors = NULL,
+                       linetype = "solid",
+                       show_legend = FALSE,
+                       legend_position = "right") {
+  if (!all(class(data) %in% c("exametrika", "IRT"))) {
+    stop("Invalid input. The variable must be from exametrika output or an output from IRT.")
+  }
+
+  n_params <- ncol(data$params)
+
+  if (n_params < 2 || n_params > 4) {
+    stop("Invalid number of parameters.")
+  }
+
+  n_items <- nrow(data$params)
+
+  # Color setup
+  if (is.null(colors)) {
+    use_color <- .gg_exametrika_palette(1)[1]
+  } else {
+    use_color <- colors[1]
+  }
+
+  # Title setup
+  if (is.logical(title) && title) {
+    plot_title <- "Test Response Function"
+  } else if (is.logical(title) && !title) {
+    plot_title <- NULL
+  } else {
+    plot_title <- title
+  }
+
+  multi <- function(x) {
+    total <- 0
+    for (i in 1:n_items) {
+      total <- total + LogisticModel(
+        x,
+        a = data$params[i, 1], # slope
+        b = data$params[i, 2], # location
+        c = ifelse(is.null(data$params[i, 3]), 0, data$params[i, 3]), # lower
+        d = ifelse(is.null(data$params[i, 4]), 1, data$params[i, 4]) # upper
+      )
+    }
+    return(total)
+  }
+
+  plot <- ggplot(data = data.frame(x = xvariable)) +
+    xlim(xvariable[1], xvariable[2]) +
+    ylim(0, n_items) +
+    stat_function(fun = multi, color = use_color, linetype = linetype) +
+    labs(
+      title = plot_title,
+      x = "ability",
+      y = "expected score"
+    )
+
+  # Legend control
+  if (!show_legend) {
+    plot <- plot + theme(legend.position = "none")
+  } else {
+    plot <- plot + theme(legend.position = legend_position)
+  }
+
+  return(plot)
+}
+
+
+#' @title Plot All Item Characteristic Curves Overlaid from exametrika
+#'
+#' @description
+#' This function takes exametrika IRT output as input and generates
+#' an overlay plot of all Item Characteristic Curves (ICC) using ggplot2.
+#' All item curves are displayed on a single graph for easy comparison.
+#'
+#' @param data An object of class \code{c("exametrika", "IRT")} from
+#'   \code{exametrika::IRT()}.
+#' @param items Numeric vector specifying which items to plot.
+#'   If \code{NULL} (default), all items are plotted.
+#' @param xvariable A numeric vector of length 2 specifying the range of the
+#'   x-axis (ability). Default is \code{c(-4, 4)}.
+#' @param title Logical or character. If \code{TRUE} (default), display an
+#'   auto-generated title. If \code{FALSE}, no title. If a character string,
+#'   use it as a custom title.
+#' @param colors Character vector of colors for each item.
+#'   If \code{NULL} (default), a colorblind-friendly palette is used.
+#' @param linetype Character or numeric specifying the line type.
+#'   Can be a single value for all items or a vector for each item.
+#'   Default is \code{"solid"}.
+#' @param show_legend Logical. If \code{TRUE} (default), display the legend.
+#' @param legend_position Character. Position of the legend.
+#'   One of \code{"right"} (default), \code{"top"}, \code{"bottom"},
+#'   \code{"left"}, \code{"none"}.
+#'
+#' @return A single ggplot object showing all Item Characteristic Curves
+#'   overlaid on one graph.
+#'
+#' @details
+#' This function is similar to calling \code{plot(IRT_result, type = "IRF", overlay = TRUE)}
+#' in the exametrika package, but returns a ggplot2 object that can be further
+#' customized.
+#'
+#' The ICC is computed using the four-parameter logistic model:
+#' \deqn{P(\theta) = c + \frac{d - c}{1 + \exp(-a(\theta - b))}}
+#'
+#' @examplesIf requireNamespace("exametrika", quietly = TRUE)
+#' library(exametrika)
+#' result <- IRT(J15S500, model = 3)
+#' plotICC_overlay_gg(result) # All items
+#' plotICC_overlay_gg(result, items = 1:5) # First 5 items only
+#' plotICC_overlay_gg(result, title = "My Custom Title", show_legend = TRUE)
+#'
+#' @seealso \code{\link{plotICC_gg}}, \code{\link{plotIIC_gg}}
+#'
+#' @importFrom ggplot2 ggplot aes geom_line scale_y_continuous
+#' @importFrom ggplot2 labs theme scale_color_manual
+#' @export
+plotICC_overlay_gg <- function(data,
+                               items = NULL,
+                               xvariable = c(-4, 4),
+                               title = TRUE,
+                               colors = NULL,
+                               linetype = "solid",
+                               show_legend = TRUE,
+                               legend_position = "right") {
+  if (!all(class(data) %in% c("exametrika", "IRT"))) {
+    stop("Invalid input. The variable must be from exametrika output or an output from IRT.")
+  }
+
+  n_params <- ncol(data$params)
+
+  if (n_params < 2 || n_params > 4) {
+    stop("Invalid number of parameters.")
+  }
+
+  n_items <- nrow(data$params)
+
+  # Select items to plot
+  if (is.null(items)) {
+    items <- 1:n_items
+  }
+  if (any(items < 1 | items > n_items)) {
+    stop("'items' must contain values between 1 and ", n_items)
+  }
+
+  # Generate theta (ability) values
+  thetas <- seq(xvariable[1], xvariable[2], length.out = 501)
+
+  # Prepare data frame for plotting
+  plot_data_list <- list()
+  for (idx in seq_along(items)) {
+    i <- items[idx]
+    item_name <- rownames(data$params)[i]
+    if (is.null(item_name) || item_name == "") {
+      item_name <- paste("Item", i)
+    }
+
+    # Get parameters
+    a <- data$params$slope[i]
+    b <- data$params$location[i]
+    c <- if (n_params >= 3) data$params$lowerAsym[i] else 0
+    d <- if (n_params >= 4) data$params$upperAsym[i] else 1
+
+    # Compute ICC for this item
+    probs <- sapply(thetas, function(theta) {
+      LogisticModel(x = theta, a = a, b = b, c = c, d = d)
+    })
+
+    plot_data_list[[idx]] <- data.frame(
+      theta = thetas,
+      probability = probs,
+      item = item_name,
+      stringsAsFactors = FALSE
+    )
+  }
+
+  plot_data <- do.call(rbind, plot_data_list)
+  plot_data$item <- factor(plot_data$item, levels = unique(plot_data$item))
+
+  # Set colors
+  n_plot_items <- length(items)
+  if (is.null(colors)) {
+    colors <- .gg_exametrika_palette(n_plot_items)
+  } else if (length(colors) < n_plot_items) {
+    warning("Not enough colors provided. Using default palette.")
+    colors <- .gg_exametrika_palette(n_plot_items)
+  }
+
+  # Set title
+  if (is.logical(title) && title) {
+    plot_title <- "Item Characteristic Curves"
+  } else if (is.logical(title) && !title) {
+    plot_title <- NULL
+  } else {
+    plot_title <- title
+  }
+
+  # Create plot
+  p <- ggplot(plot_data, aes(x = theta, y = probability, color = item, group = item)) +
+    geom_line(linetype = linetype) +
+    scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, 0.25)) +
+    labs(
+      title = plot_title,
+      x = "ability",
+      y = "probability",
+      color = "Item"
+    ) +
+    scale_color_manual(values = colors)
+
+  # Legend control
+  if (!show_legend) {
+    p <- p + theme(legend.position = "none")
+  } else {
+    p <- p + theme(legend.position = legend_position)
+  }
+
+  return(p)
+}
+
+
+#' @title Plot All Item Information Curves Overlaid from exametrika
+#'
+#' @description
+#' This function takes exametrika IRT or GRM output as input and generates
+#' an overlay plot of all Item Information Curves (IIC) using ggplot2.
+#' All item curves are displayed on a single graph for easy comparison.
+#'
+#' @param data An object of class \code{c("exametrika", "IRT")} from
+#'   \code{exametrika::IRT()} or \code{c("exametrika", "GRM")} from
+#'   \code{exametrika::GRM()}.
+#' @param items Numeric vector specifying which items to plot.
+#'   If \code{NULL} (default), all items are plotted.
+#' @param xvariable A numeric vector of length 2 specifying the range of the
+#'   x-axis (ability). Default is \code{c(-4, 4)}.
+#' @param title Logical or character. If \code{TRUE} (default), display an
+#'   auto-generated title. If \code{FALSE}, no title. If a character string,
+#'   use it as a custom title.
+#' @param colors Character vector of colors for each item.
+#'   If \code{NULL} (default), a colorblind-friendly palette is used.
+#' @param linetype Character or numeric specifying the line type.
+#'   Can be a single value for all items or a vector for each item.
+#'   Default is \code{"solid"}.
+#' @param show_legend Logical. If \code{TRUE} (default), display the legend.
+#' @param legend_position Character. Position of the legend.
+#'   One of \code{"right"} (default), \code{"top"}, \code{"bottom"},
+#'   \code{"left"}, \code{"none"}.
+#'
+#' @return A single ggplot object showing all Item Information Curves
+#'   overlaid on one graph.
+#'
+#' @details
+#' This function is similar to calling \code{plot(IRT_result, type = "IIF", overlay = TRUE)}
+#' or \code{plot(GRM_result, type = "IIF", overlay = TRUE)} in the exametrika package,
+#' but returns a ggplot2 object that can be further customized.
+#'
+#' The Item Information Function indicates how precisely an item measures
+#' ability at each point on the theta scale. Items with higher discrimination
+#' parameters provide more information. The peak of the information curve
+#' occurs near the item's difficulty parameter.
+#'
+#' @examplesIf requireNamespace("exametrika", quietly = TRUE)
+#' library(exametrika)
+#' \donttest{
+#' # IRT example
+#' result_irt <- IRT(J15S500, model = 3)
+#' plotIIC_overlay_gg(result_irt) # All items
+#' plotIIC_overlay_gg(result_irt, items = 1:5) # First 5 items only
+#'
+#' # GRM example
+#' result_grm <- GRM(J5S1000)
+#' plotIIC_overlay_gg(result_grm, show_legend = TRUE)
+#' }
+#'
+#' @seealso \code{\link{plotIIC_gg}}, \code{\link{plotICC_gg}}
+#'
+#' @importFrom ggplot2 ggplot aes geom_line
+#' @importFrom ggplot2 labs theme scale_color_manual
+#' @export
+plotIIC_overlay_gg <- function(data,
+                               items = NULL,
+                               xvariable = c(-4, 4),
+                               title = TRUE,
+                               colors = NULL,
+                               linetype = "solid",
+                               show_legend = TRUE,
+                               legend_position = "right") {
+  # Check model type
+  is_IRT <- all(class(data) %in% c("exametrika", "IRT"))
+  is_GRM <- all(class(data) %in% c("exametrika", "GRM"))
+
+  if (!is_IRT && !is_GRM) {
+    stop("Invalid input. The variable must be from exametrika output (IRT or GRM).")
+  }
+
+  # Generate theta (ability) values
+  thetas <- seq(xvariable[1], xvariable[2], length.out = 501)
+
+  # === IRT Model ===
+  if (is_IRT) {
+    n_params <- ncol(data$params)
+
+    if (n_params < 2 || n_params > 4) {
+      stop("Invalid number of parameters.")
+    }
+
+    n_items <- nrow(data$params)
+
+    # Select items to plot
+    if (is.null(items)) {
+      items <- 1:n_items
+    }
+    if (any(items < 1 | items > n_items)) {
+      stop("'items' must contain values between 1 and ", n_items)
+    }
+
+    # Prepare data frame for plotting
+    plot_data_list <- list()
+    for (idx in seq_along(items)) {
+      i <- items[idx]
+      item_name <- rownames(data$params)[i]
+      if (is.null(item_name) || item_name == "") {
+        item_name <- paste("Item", i)
+      }
+
+      # Get parameters
+      a <- data$params$slope[i]
+      b <- data$params$location[i]
+      c <- if (n_params >= 3) data$params$lowerAsym[i] else 0
+      d <- if (n_params >= 4) data$params$upperAsym[i] else 1
+
+      # Compute IIC for this item
+      info_values <- sapply(thetas, function(theta) {
+        ItemInformationFunc(x = theta, a = a, b = b, c = c, d = d)
+      })
+
+      plot_data_list[[idx]] <- data.frame(
+        theta = thetas,
+        information = info_values,
+        item = item_name,
+        stringsAsFactors = FALSE
+      )
+    }
+
+    plot_data <- do.call(rbind, plot_data_list)
+    plot_data$item <- factor(plot_data$item, levels = unique(plot_data$item))
+  }
+
+  # === GRM Model ===
+  if (is_GRM) {
+    params <- data$params
+    n_items <- nrow(params)
+
+    # Select items to plot
+    if (is.null(items)) {
+      items <- 1:n_items
+    }
+    if (any(items < 1 | items > n_items)) {
+      stop("'items' must contain values between 1 and ", n_items)
+    }
+
+    # Prepare data frame for plotting
+    plot_data_list <- list()
+    for (idx in seq_along(items)) {
+      i <- items[idx]
+      item_name <- rownames(params)[i]
+      if (is.null(item_name) || item_name == "") {
+        item_name <- paste("Item", i)
+      }
+
+      # Get parameters
+      a <- params[i, 1]
+      b <- as.numeric(params[i, -1])
+      b <- b[!is.na(b)]
+
+      # Compute GRM IIC for this item
+      info_values <- sapply(thetas, function(theta) {
+        ItemInformationFunc_GRM(theta, a, b)
+      })
+
+      plot_data_list[[idx]] <- data.frame(
+        theta = thetas,
+        information = info_values,
+        item = item_name,
+        stringsAsFactors = FALSE
+      )
+    }
+
+    plot_data <- do.call(rbind, plot_data_list)
+    plot_data$item <- factor(plot_data$item, levels = unique(plot_data$item))
+  }
+
+  # Set colors
+  n_plot_items <- length(items)
+  if (is.null(colors)) {
+    colors <- .gg_exametrika_palette(n_plot_items)
+  } else if (length(colors) < n_plot_items) {
+    warning("Not enough colors provided. Using default palette.")
+    colors <- .gg_exametrika_palette(n_plot_items)
+  }
+
+  # Set title
+  if (is.logical(title) && title) {
+    plot_title <- "Item Information Curves"
+  } else if (is.logical(title) && !title) {
+    plot_title <- NULL
+  } else {
+    plot_title <- title
+  }
+
+  # Create plot
+  p <- ggplot(plot_data, aes(x = theta, y = information, color = item, group = item)) +
+    geom_line(linetype = linetype) +
+    labs(
+      title = plot_title,
+      x = "ability",
+      y = "information",
+      color = "Item"
+    ) +
+    scale_color_manual(values = colors)
+
+  # Legend control
+  if (!show_legend) {
+    p <- p + theme(legend.position = "none")
+  } else {
+    p <- p + theme(legend.position = legend_position)
+  }
+
+  return(p)
+}
