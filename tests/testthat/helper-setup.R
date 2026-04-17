@@ -166,6 +166,41 @@ if (has_exametrika) {
     error = function(e) NULL
   )
 
+  # ---- Rated Biclustering fixture (synthetic small data) ----
+  # Rated data: items scored 0-4 (e.g. 5-point Likert scale)
+  set.seed(44)
+  .synth_rated <- matrix(sample(0:4, 40 * 12, replace = TRUE),
+    nrow = 40, ncol = 12
+  )
+  colnames(.synth_rated) <- paste0("Item", 1:12)
+  fixture_ratedBiclust <- tryCatch(
+    exametrika::Biclustering(.synth_rated,
+      nfld = 2, ncls = 3,
+      dataType = "rated"
+    ),
+    error = function(e) NULL
+  )
+
+  # ---- DistractorAnalysis fixtures (from LRA.rated) ----
+  fixture_DA_lra <- tryCatch(
+    {
+      lra_rated <- exametrika::LRA(exametrika::J21S300, nrank = 5, mic = TRUE)
+      exametrika::DistractorAnalysis(lra_rated)
+    },
+    error = function(e) NULL
+  )
+
+  # ---- DistractorAnalysis fixtures (from ratedBiclustering) ----
+  fixture_DA_biclust <- tryCatch(
+    {
+      bic_rated <- exametrika::Biclustering(exametrika::J21S300,
+        ncls = 5, nfld = 3, method = "R", maxiter = 100
+      )
+      exametrika::DistractorAnalysis(bic_rated)
+    },
+    error = function(e) NULL
+  )
+
   # Clean up temporary variables
-  rm(.synth_ordinal, .synth_nominal)
+  rm(.synth_ordinal, .synth_nominal, .synth_rated)
 }

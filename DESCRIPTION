@@ -1,7 +1,7 @@
 Package: ggExametrika
 Type: Package
 Title: Visualization of 'exametrika' Output Using 'ggplot2'
-Version: 1.0.0
+Version: 1.1.0
 Authors@R: c(
     person(given = "Koji", family = "Kosugi", role = c("aut", "cre"), email = "kosugitti@gmail.com", comment = c(ORCID = "0000-0001-5816-0099")),
     person(given = "Daichi", family = "Kamimura", role = c("aut")))
@@ -23,9 +23,9 @@ RoxygenNote: 7.3.3
 Suggests: exametrika, testthat (>= 3.0.0)
 Config/testthat/edition: 3
 NeedsCompilation: no
-Packaged: 2026-03-25 00:04:06 UTC; newton
+Packaged: 2026-04-17 03:40:29 UTC; newton
 Author: Koji Kosugi [aut, cre] (ORCID: <https://orcid.org/0000-0001-5816-0099>),
   Daichi Kamimura [aut]
 Maintainer: Koji Kosugi <kosugitti@gmail.com>
 Repository: CRAN
-Date/Publication: 2026-03-29 16:20:03 UTC
+Date/Publication: 2026-04-17 04:10:02 UTC

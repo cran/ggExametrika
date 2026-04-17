@@ -1,3 +1,37 @@
+# ggExametrika 1.1.0
+
+## New Features
+
+* Add `plotDistractor_gg()` for Distractor Analysis visualization
+  (exametrika v1.11.0). Creates stacked bar charts showing response category
+  proportions by rank/class, with the correct answer highlighted. Supports
+  both `LRA` (rated) and `Biclustering` (rated) DistractorAnalysis results.
+* Add `fixture_DA_lra` and `fixture_DA_biclust` test fixtures and 9 test
+  cases in `test-distractor-plots.R`.
+
+## Bug Fixes
+
+* Replace deprecated `sec_axis(trans = ...)` with `sec_axis(transform = ...)`
+  in `plotTRP_gg`, `plotLCD_gg`, `plotLRD_gg` (ggplot2 >= 3.5.0).
+* Add `\donttest{}` to `plotScoreFreq_gg` example to avoid CRAN time limit
+  NOTE on Windows.
+
+## ratedBiclustering Support
+
+* Add support for `ratedBiclustering` class from exametrika v1.11.0 (Biclustering
+  with `dataType = "rated"`).
+  - Update class validation in 11 plot functions across 5 files:
+    `plotFRP_gg`, `plotTRP_gg`, `plotLCD_gg`, `plotLRD_gg`, `plotCMP_gg`,
+    `plotRMP_gg` (IRPtoCMPRMP.R), `plotFCRP_gg` (PolyBiclustering.R),
+    `plotArray_gg` (arraytoLDPSR.R), `plotScoreField_gg` (ScoreField.R),
+    `plotCRV_gg`, `plotRRV_gg` (Biclustering.R).
+  - Update roxygen2 `@param data` and `@details` documentation to mention
+    `ratedBiclustering`.
+* Add `fixture_ratedBiclust` test fixture in `helper-setup.R`.
+* Add 10 test cases for `ratedBiclustering` in `test-PolyBiclustering-plots.R`
+  covering `plotFCRP_gg`, `plotScoreField_gg`, `plotFRP_gg`, `plotTRP_gg`,
+  `plotRRV_gg`, `plotCRV_gg`, `plotArray_gg`, `plotRMP_gg`, `plotLRD_gg`.
+
 # ggExametrika 1.0.0
 
 ## First CRAN Release
