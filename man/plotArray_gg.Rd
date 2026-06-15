@@ -7,13 +7,15 @@
 plotArray_gg(
   data,
   Original = TRUE,
-  Clusterd = TRUE,
-  Clusterd_lines = TRUE,
-  Clusterd_lines_color = NULL,
+  Clustered = TRUE,
+  Clustered_lines = TRUE,
+  Clustered_lines_color = NULL,
   title = TRUE,
   colors = NULL,
   show_legend = NULL,
-  legend_position = "right"
+  legend_position = "right",
+  border = FALSE,
+  border_linewidth = 0.5
 )
 }
 \arguments{
@@ -27,13 +29,13 @@ plotArray_gg(
 \item{Original}{Logical. If \code{TRUE} (default), plot the original
 (unsorted) response data.}
 
-\item{Clusterd}{Logical. If \code{TRUE} (default), plot the clustered
+\item{Clustered}{Logical. If \code{TRUE} (default), plot the clustered
 (sorted by class and field) response data.}
 
-\item{Clusterd_lines}{Logical. If \code{TRUE} (default), draw lines
+\item{Clustered_lines}{Logical. If \code{TRUE} (default), draw lines
 on the clustered plot to indicate class and field boundaries.}
 
-\item{Clusterd_lines_color}{Character. Color of the boundary lines.
+\item{Clustered_lines_color}{Character. Color of the boundary lines.
 If \code{NULL} (default), uses \code{"red"} for binary data or
 \code{"white"} for multi-valued data.}
 
@@ -51,6 +53,15 @@ Default is \code{FALSE} for binary data, \code{TRUE} for multi-valued.}
 \item{legend_position}{Character. Position of the legend.
 One of \code{"right"} (default), \code{"top"}, \code{"bottom"},
 \code{"left"}, \code{"none"}.}
+
+\item{border}{Logical or character. If \code{TRUE}, draw a rectangular
+border around each panel so that the original and clustered panels
+are visually separated. If \code{FALSE} (default), no border is
+drawn (the v1.1.0 behavior). A character string is used as the
+border color (default color is \code{"black"}).}
+
+\item{border_linewidth}{Numeric. Line width of the panel border.
+Default is \code{0.5}.}
 }
 \value{
 A ggplot object or a grid arrangement of two ggplot objects
@@ -83,12 +94,12 @@ result <- Biclustering(J35S515, nfld = 5, ncls = 6)
 plotArray_gg(result)
 
 # Custom boundary line color
-plotArray_gg(result, Clusterd_lines_color = "blue")
+plotArray_gg(result, Clustered_lines_color = "blue")
 
 # Multi-valued data with custom colors
 synthetic_data <- matrix(sample(0:3, 50 * 20, replace = TRUE), nrow = 50, ncol = 20)
 result_multi <- Biclustering(synthetic_data, nfld = 4, ncls = 5)
-plotArray_gg(result_multi, show_legend = TRUE, Clusterd_lines_color = "darkgreen")
+plotArray_gg(result_multi, show_legend = TRUE, Clustered_lines_color = "darkgreen")
 \dontshow{\}) # examplesIf}
 }
 \seealso{
