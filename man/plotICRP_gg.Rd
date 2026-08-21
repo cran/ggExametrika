@@ -62,14 +62,14 @@ For an item with \eqn{K} categories (0, 1, ..., K-1), the ICRP shows:
 The sum of all probabilities at each rank equals 1.0, as they represent
 mutually exclusive response options.
 
-Typically, higher ranks (higher ability) show higher probabilities for
-higher categories and lower probabilities for lower categories.
+Ranks are shown in natural order (rank 1, rank 2, ...), matching the
+base plots of the parent exametrika package.
 }
 \examples{
 \dontshow{if (requireNamespace("exametrika", quietly = TRUE)) withAutoprint(\{ # examplesIf}
 library(exametrika)
 \donttest{
-result <- LRA(J15S3810, nrank = 4, dataType = "ordinal")
+result <- LRA(J5S1000, nrank = 4, dataType = "ordinal")
 
 # Plot first 4 items
 plot <- plotICRP_gg(result, items = 1:4)

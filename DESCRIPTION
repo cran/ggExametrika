@@ -1,7 +1,7 @@
 Package: ggExametrika
 Type: Package
 Title: Visualization of 'exametrika' Output Using 'ggplot2'
-Version: 1.1.1
+Version: 1.1.2
 Authors@R: c(
     person(given = "Koji", family = "Kosugi", role = c("aut", "cre"), email = "kosugitti@gmail.com", comment = c(ORCID = "0000-0001-5816-0099")),
     person(given = "Daichi", family = "Kamimura", role = c("aut")))
@@ -19,13 +19,13 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 Depends: R (>= 4.1.0), ggplot2
 Imports: ggraph, ggrepel, gridExtra, igraph, tidyr
-Suggests: exametrika, testthat (>= 3.0.0)
+Suggests: exametrika (>= 1.11.0), testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Config/roxygen2/version: 8.0.0
 NeedsCompilation: no
-Packaged: 2026-06-15 00:39:01 UTC; pythagoras
+Packaged: 2026-08-20 11:16:25 UTC; newton
 Author: Koji Kosugi [aut, cre] (ORCID: <https://orcid.org/0000-0001-5816-0099>),
   Daichi Kamimura [aut]
 Maintainer: Koji Kosugi <kosugitti@gmail.com>
 Repository: CRAN
-Date/Publication: 2026-06-15 05:10:11 UTC
+Date/Publication: 2026-08-21 05:43:38 UTC

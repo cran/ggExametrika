@@ -1,3 +1,173 @@
+# ggExametrika 1.1.2 (development)
+
+Package-wide audit release: three high-severity bug fixes, a set of
+robustness fixes, API/validation unification, and internal refactoring.
+No exported function signatures change except as noted under Breaking
+Changes.
+
+## Bug Fixes (high severity)
+
+* Fix 4PL parameter drop in `plotICC_gg()` and `plotIIC_gg()`. The
+  parameter-passing used `if (n_params == 3)` / `if (n_params == 4)`,
+  so for 4PL models the `lowerAsym` parameter was silently dropped
+  (treated as 0) and only `upperAsym` was applied. Curves for
+  `IRT(..., model = 4)` were drawn with the wrong lower asymptote,
+  while the `plot*_overlay_gg()` variants were correct, so the single
+  and overlay versions of the same item disagreed. Both sites now use
+  `>=` as the overlay versions do. Added a regression test that checks
+  the drawn ICC approaches `lowerAsym` at low theta.
+* Fix the GRM item information formula in `ItemInformationFunc_GRM()`.
+  The previous implementation computed `a^2 * sum(P*_k (1 - P*_k))`
+  over the boundary probabilities, which is not the Samejima GRM
+  information and overstated information by a factor of roughly 2 or
+  more across the theta range. The function now computes the correct
+  Samejima (1969) information
+  `I(theta) = sum_k [P'_k(theta)]^2 / P_k(theta)` on the logistic
+  metric used by the parent package's estimation (no 1.702 scaling
+  constant), verified against numerical differentiation. The parent
+  package's own `grm_iif()` had a related set of defects and was fixed
+  in the same form (exametrika > 1.15.0), so GRM IIC/TIC plots from
+  ggExametrika match the fixed parent's base plots numerically.
+  Affects the GRM branches of `plotIIC_gg()` and `plotTIC_gg()`. Added
+  a self-contained numerical-Fisher test plus a version-guarded
+  agreement test against `exametrika::grm_iif()`.
+* Remove the unconditional rank-axis reversal in `plotICBR_gg()`,
+  `plotICRP_gg()` (`n_ranks - Rank + 1`) and `plotScoreRank_gg()`
+  (`scale_x_reverse()`). The reversal was based on the assumption that
+  exametrika always orders rank 1 = high ability, but the parent
+  package's rank ordering is data-dependent and its base plots draw
+  ranks in natural order. The ggplot versions were therefore mirror
+  images of the base plots in the common case. Ranks are now always
+  drawn in natural order (rank 1, rank 2, ...), matching
+  `exametrika::plot()`. The contradictory roxygen text about rank
+  direction was corrected as well. **This changes the x-axis direction
+  of existing ICBR/ICRP/ScoreRank plots.**
+
+## Bug Fixes (robustness)
+
+* `plotTIC_gg()` and `plotTRF_gg()` no longer rely on out-of-range
+  data.frame column indexing (`data$params[i, 3]` returning `NULL` for
+  2PL) and instead branch explicitly on the number of parameters.
+* `combinePlots_gg()` now validates its inputs: non-list/empty `plots`,
+  non-numeric/NA `selectPlots`, and indices below 1 are rejected with a
+  clear error instead of an obscure subscript error.
+* `plotDistractor_gg()` validates the `items` and `ranks` ranges, and
+  no longer errors on items whose correct answer (`CA`) is `NA`.
+* `plotScoreFreq_gg()` no longer runs its threshold loop with
+  `1:(n_ranks - 1)` when only one rank is present (off-by-one via
+  `1:0`); uses `seq_len()`.
+* `plotArray_gg()` boundary lines no longer break when a class or field
+  has no members (empty levels dropped from `table()` produced `NA`
+  breaks); explicit factor levels are used, and `n_class` gains a
+  fallback for missing count fields. The return-value documentation now
+  describes the actual behavior (gtable vs list).
+* `plotFCRP_gg()` (bar style) no longer fails when there are no
+  boundary segments to draw (e.g. a single class/rank).
+* `plotFieldPIRP_gg()` extracts the field number for labels with a
+  regex instead of a hard-coded `substr(field, 7, 8)`.
+* `plotGraph_gg()` validates its input via `inherits()` instead of
+  `class(data)[2]` position matching, and reads the number of
+  classes/ranks through the `n_class`/`Nclass` and `n_rank`/`Nrank`
+  fallback chain like the rest of the package.
+* `plotCMP_gg()` now redirects `LRAordinal`/`LRArated` output to the
+  RMP display like other rank-model output (previously it stopped with
+  an error); `plotRMP_gg()` also accepts `LRArated`.
+* User-supplied `colors` vectors that are shorter than the number of
+  series now consistently warn and recycle across all plot functions
+  (previously three behaviors coexisted: silent `NA` colors, a warning
+  plus palette fallback, and a hard ggplot2 error).
+* `plotFCBR_gg()` falls back to `"Rank"` when `data$msg` is missing.
+* `tests/testthat/Rplots.pdf` is now listed in `.Rbuildignore` so a
+  stray test artifact can no longer slip into the CRAN tarball
+  (recurrence of the v0.0.28 issue).
+
+## Consistency / Internal Refactoring
+
+* Cut the CRAN check time. win-builder measured 686 s against CRAN's
+  600 s Windows limit, with the tests alone accounting for 484 s (71%).
+  The cause was fixture size rather than the number of tests:
+  `plotRMP_gg()` / `plotCMP_gg()` draw one ggplot per respondent, so the
+  LRAordinal and LRArated fixtures built on 3,810 respondents were
+  producing 3,810 plots on every call. Those fixtures now use a 200-row
+  subset and the LDLRA fixture a 300-row one; the assertions are
+  structural and do not depend on the respondent count. The suite runs in
+  38 s locally, down from 72 s, with the same coverage.
+* The examples for `plotScoreRank_gg()`, `plotScoreFreq_gg()`,
+  `plotICRP_gg()` and `plotICBR_gg()` fit an ordinal LRA on `J5S1000`
+  instead of `J15S3810`. The fit, not the plotting, was the cost: 28 s
+  elapsed for `plotScoreRank_gg()` on Windows, which raised a NOTE for
+  exceeding the 10 s example limit. (`\donttest{}` would not have helped;
+  CRAN runs those on the incoming check.)
+* New `test-fixtures.R` asserts that every fixture builds when exametrika
+  is installed. The fixtures are guarded by `tryCatch(..., NULL)` plus
+  `skip_if()` so the suite survives without the suggested package, but
+  that also meant a broken fixture disabled its tests silently -- during
+  this release two fixtures were briefly over-trimmed and 15 tests
+  vanished while the suite still reported no failures.
+
+* `README.Rmd` is the source of truth again and `README.md` is generated
+  from it, matching the parent exametrika package. Since 2026-02-17 the
+  convention here had been inverted: README.md was hand-maintained while
+  README.Rmd survived as a stub whose only content was a comment asking
+  not to knit it -- a stub that still rendered cleanly, so `build_readme()`
+  would silently overwrite the real README and exit successfully. The
+  conversion was verified word-for-word (856 tokens, none lost or added)
+  and the round trip is idempotent. Development-only; no effect on the
+  installed package, as README.Rmd is in `.Rbuildignore`.
+
+* Drop the PascalCase field-name fallbacks (`Nclass`, `Nfield`, `Nrank`).
+  They were removed from exametrika in 2.0.0 and had been deprecated there
+  since 1.8.0, so no version this package supports (`>= 1.11.0`) could
+  reach them. Where the two names remain consulted in sequence
+  (`n_class` then `n_rank`) that is not a legacy fallback but a real
+  distinction: unordered models report the former and ranked ones the
+  latter. Verified against exametrika 2.0.0 with the suite unchanged.
+
+* New internal helpers in `R/utils-internal.R`:
+  `.validate_exametrika()` (single input-validation idiom; the previous
+  code mixed four idioms, two of which either let unrelated
+  `exametrika` objects through or would break when the parent package
+  adds classes to its outputs), `.resolve_colors()`,
+  `.resolve_title()`, `.apply_legend()`, `.variable_scaler()` and
+  `.axis_scaler()` (previously copy-pasted three times in
+  `IRPtoCMPRMP.R`).
+* Consolidated near-identical function pairs into shared internal
+  workers: `plotCRV_gg()`/`plotRRV_gg()`
+  (`.plot_reference_vector()`), `plotLCD_gg()`/`plotLRD_gg()`
+  (`.plot_student_distribution()`), `plotCMP_gg()`/`plotRMP_gg()`
+  (`.plot_membership_profile()`), and
+  `plotICBR_gg()`/`plotICRP_gg()` (`.plot_item_category()`). Behavior
+  (including redirect warnings) is unchanged; `plotCRV_gg`/`plotRRV_gg`
+  keep the historical `class`/`rank` columns in `p$data` for backward
+  compatibility.
+* Removed a local re-definition of `ItemInformationFunc()` inside
+  `plotIIC_gg()` that shadowed the exported function.
+* Removed dead code: unreachable `is.nan()` cleanup in
+  `plotDistractor_gg()`, always-true `!is.null(colors)`/`linetype`
+  guards after unconditional defaults, and the `show_labels = NULL`
+  to `FALSE` conversion (the default is now simply `FALSE`).
+* `isTRUE(Num_Students)` instead of `Num_Students == T`; bare
+  `geom_text_repel()` unified to `ggrepel::geom_text_repel()`; loop
+  variable `c` renamed to avoid shadowing `base::c`.
+* Removed unused `@importFrom` entries (`guides`, `guide_legend`,
+  `scale_x_reverse`).
+* Documentation fixes: `linetype` in `plotCRV_gg()`/`plotRRV_gg()` is
+  documented as a scalar (the vector form promised before was never
+  implemented and errored), `plotICRF_gg()`'s custom title is
+  documented as applying to every item's plot, and the ICBR boundary
+  list no longer describes a nonexistent "Line K ... always 1.0" line.
+* `DESCRIPTION`: `Suggests: exametrika (>= 1.11.0)` (the test fixtures
+  require the rated/ordinal biclustering outputs introduced there).
+
+## Tests
+
+* New `test-utility-functions.R` covering `LogisticModel()`,
+  `ItemInformationFunc()` (2PL closed form and peak location),
+  `ItemInformationFunc_GRM()` (self-contained numerical-Fisher check,
+  binary special case, and a version-guarded agreement test against
+  the fixed `exametrika::grm_iif()`), and a 4PL `lowerAsym` regression
+  test for `plotICC_gg()`.
+
 # ggExametrika 1.1.1
 
 ## New Features
