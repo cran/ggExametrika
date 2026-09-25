@@ -1,3 +1,30 @@
+#' Pull the guide box out of a ggplot
+#'
+#' Used to share one legend between the two array panels instead of drawing
+#' the same one twice. Returns NULL when the plot carries no legend.
+#'
+#' @param p A ggplot object, already themed with the wanted legend position so
+#'   that the guide box has the matching orientation.
+#' @return A grob, or NULL.
+#' @keywords internal
+
+.extract_legend <- function(p) {
+  g <- ggplot2::ggplotGrob(p)
+  idx <- which(vapply(g$grobs, function(x) grepl("^guide-box", x$name), logical(1)))
+  for (i in idx) {
+    box <- g$grobs[[i]]
+    # ggplot2 lays out a guide box on every side; all but one are empty
+    if (!inherits(box, "zeroGrob")) {
+      inner <- if (!is.null(box$grobs)) box$grobs else box$children
+      if (length(inner) > 0) {
+        return(box)
+      }
+    }
+  }
+  return(NULL)
+}
+
+
 #' @title Plot Array from exametrika
 #'
 #' @description
@@ -26,12 +53,18 @@
 #' @param title Logical or character. If \code{TRUE} (default), display
 #'   auto-generated titles. If \code{FALSE}, no titles. If a character
 #'   string, use it as a custom title prefix.
-#' @param colors Character vector of colors for each category.
+#' @param colors Character vector of colors. Supply either one colour per
+#'   valid category, in which case missing data keeps the default colour, or
+#'   one colour per level including missing data, in which case the first
+#'   element is used for missing. Default NULL uses a sequential ramp for
+#'   ordered categories and black and white for binary data.
 #'   If \code{NULL} (default), uses white/black for binary data or a
 #'   colorblind-friendly palette for multi-valued data.
 #' @param show_legend Logical. If \code{TRUE}, display the legend.
 #'   Default is \code{FALSE} for binary data, \code{TRUE} for multi-valued.
-#' @param legend_position Character. Position of the legend.
+#' @param legend_position Character. Position of the legend. Defaults to
+#'   "bottom": the array panels are tall, so a legend beside them wastes width.
+#'   When both panels are drawn the legend is shared, not repeated.
 #'   One of \code{"right"} (default), \code{"top"}, \code{"bottom"},
 #'   \code{"left"}, \code{"none"}.
 #' @param border Logical or character. If \code{TRUE}, draw a rectangular
@@ -86,7 +119,7 @@ plotArray_gg <- function(data,
                          title = TRUE,
                          colors = NULL,
                          show_legend = NULL,
-                         legend_position = "right",
+                         legend_position = "bottom",
                          border = FALSE,
                          border_linewidth = 0.5) {
   # Border color resolution
@@ -121,11 +154,15 @@ plotArray_gg <- function(data,
 
   # Set default boundary line color based on number of valid categories
   if (is.null(Clustered_lines_color)) {
-    if (n_valid_categories <= 2 && !has_missing) {
+    if (n_valid_categories > 2) {
+      # The sequential ramp is light at the bottom end, so white lines would
+      # disappear into the palest cells. A dark red reads against every step.
+      Clustered_lines_color <- "#B00020"
+    } else if (n_valid_categories <= 2 && !has_missing) {
       # Binary data: red lines for better visibility on black/white
       Clustered_lines_color <- "red"
     } else {
-      # Multi-valued data: white lines
+      # Two categories plus missing: the qualitative fills are dark enough
       Clustered_lines_color <- "white"
     }
   }
@@ -135,29 +172,23 @@ plotArray_gg <- function(data,
     if (n_valid_categories == 2 && !has_missing) {
       # Binary data: white (0) and black (1)
       valid_colors <- c("#FFFFFF", "#000000")
+    } else if (n_valid_categories > 2) {
+      # Ordered categories: a sequential ramp, so that the category index is
+      # readable as lightness. A qualitative palette hides the ordering.
+      valid_colors <- .gg_exametrika_sequential(n_valid_categories)
     } else {
-      # Multi-valued data: use colorblind-friendly palette
-      valid_colors <- c(
-        "#E69F00", "#0173B2", "#DE8F05", "#029E73", "#CC78BC",
-        "#CA9161", "#FBAFE4", "#949494", "#ECE133", "#56B4E9"
-      )
-      if (length(valid_colors) < n_valid_categories) {
-        # Add more colors if needed
-        additional_colors <- c(
-          "#D55E00", "#F0E442", "#009E73", "#CC79A7", "#0072B2",
-          "#E8601C", "#7CAE00", "#C77CFF", "#00BFC4", "#F8766D"
-        )
-        valid_colors <- c(valid_colors, additional_colors)[1:n_valid_categories]
-      } else {
-        valid_colors <- valid_colors[1:n_valid_categories]
-      }
+      # Two valid categories alongside missing data: keep the qualitative
+      # palette, since a two-step ramp would be hard to tell apart.
+      valid_colors <- c("#E69F00", "#0173B2")[1:n_valid_categories]
     }
 
     # Assign colors to all values (including -1 if present)
     use_colors <- character(n_categories)
     for (i in seq_along(all_values)) {
       if (all_values[i] == -1) {
-        use_colors[i] <- "#000000" # Black for missing
+        # Grey, not black: against a sequential ramp black reads as the
+        # darkest category rather than as missing.
+        use_colors[i] <- if (n_valid_categories > 2) "#9E9E9E" else "#000000"
       } else {
         # Find position in valid_values
         valid_idx <- which(valid_values == all_values[i])
@@ -165,7 +196,21 @@ plotArray_gg <- function(data,
       }
     }
   } else {
-    use_colors <- .resolve_colors(colors, n_categories)
+    # A supplied vector is read by its length. Missing data occupies a slot of
+    # its own, so a vector with one colour per valid category would otherwise
+    # be shifted by one and the last category would wrap around.
+    if (has_missing && length(colors) == n_valid_categories) {
+      use_colors <- character(n_categories)
+      for (i in seq_along(all_values)) {
+        if (all_values[i] == -1) {
+          use_colors[i] <- if (n_valid_categories > 2) "#9E9E9E" else "#000000"
+        } else {
+          use_colors[i] <- colors[which(valid_values == all_values[i])]
+        }
+      }
+    } else {
+      use_colors <- .resolve_colors(colors, n_categories)
+    }
   }
 
   # Create labels for legend (NA for -1, numbers for others)
@@ -350,7 +395,57 @@ plotArray_gg <- function(data,
   }
 
   if (Original == TRUE && Clustered == TRUE) {
-    plots <- grid.arrange(plots[[1]], plots[[2]], nrow = 1)
+    # Both panels share one scale, so draw the legend once beside or below the
+    # pair rather than repeating it inside each panel.
+    shared_legend <- if (isTRUE(show_legend)) .extract_legend(plots[[1]]) else NULL
+    if (is.null(shared_legend)) {
+      plots <- grid.arrange(plots[[1]], plots[[2]], nrow = 1)
+    } else {
+      panels <- gridExtra::arrangeGrob(
+        plots[[1]] + ggplot2::theme(legend.position = "none"),
+        plots[[2]] + ggplot2::theme(legend.position = "none"),
+        nrow = 1
+      )
+      vertical <- legend_position %in% c("bottom", "top")
+      parts <- list(panels, shared_legend)
+      flip <- legend_position %in% c("top", "left")
+      if (flip) {
+        parts <- rev(parts)
+      }
+      # Give the guide box exactly the room it asks for; a fixed ratio clips
+      # the legend title at some figure sizes.
+      if (vertical) {
+        legend_size <- if (!is.null(shared_legend$heights)) {
+          sum(shared_legend$heights)
+        } else {
+          grid::unit(1, "lines")
+        }
+        panel_size <- grid::unit(1, "null")
+        plots <- grid.arrange(
+          grobs = parts, nrow = 2,
+          heights = if (flip) {
+            grid::unit.c(legend_size, panel_size)
+          } else {
+            grid::unit.c(panel_size, legend_size)
+          }
+        )
+      } else {
+        legend_size <- if (!is.null(shared_legend$widths)) {
+          sum(shared_legend$widths)
+        } else {
+          grid::unit(4, "lines")
+        }
+        panel_size <- grid::unit(1, "null")
+        plots <- grid.arrange(
+          grobs = parts, ncol = 2,
+          widths = if (flip) {
+            grid::unit.c(legend_size, panel_size)
+          } else {
+            grid::unit.c(panel_size, legend_size)
+          }
+        )
+      }
+    }
   }
 
   return(plots)

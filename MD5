@@ -1,7 +1,7 @@
-aca0281fbdbff2141f98478210d02d3a *DESCRIPTION
+28f6cb0c538878328dbbed0cd537b040 *DESCRIPTION
 0968f65b5c148ade5118380da19356f6 *LICENSE
 1740f9d327733c45cda9c5d578655a02 *NAMESPACE
-5728527ecc5fbc3a046855e9eae65040 *NEWS.md
+b37f6ebb238c725306934e69014f50f4 *NEWS.md
 a1c0f189b86a69e695adf4a0f7c5688f *R/Biclustering.R
 4c7ea86485ac1fdd59e25b0e4f5c3e0c *R/GRM.R
 aa14aae22dad99362abb4de90b0c279f *R/ICCtoTIC.R
@@ -10,9 +10,9 @@ aa14aae22dad99362abb4de90b0c279f *R/ICCtoTIC.R
 4ba7250d1c43a1092ba717619beb534c *R/PolyBiclustering.R
 f77a9b475723db81addf06076372aafb *R/ScoreField.R
 13d4c38be56786e040b65e79d3abb58e *R/ScoreRank.R
-eeac81dfa2645e16318ca5d4bfbb7372 *R/arraytoLDPSR.R
+29c61502f3869680ddb19fe2078334b7 *R/arraytoLDPSR.R
 f2641bb82f1b530ff177650752e1cd42 *R/option.R
-6902dd169160a03765782579cd3da2e2 *R/palette.R
+0c732a4c00ec96aa1eb9656b422e6a29 *R/palette.R
 2283faa029a05d1c217a705ffb49e290 *R/plotDistractor_gg.R
 59bd0c795c460599d937327ae6d0c3de *R/plotFCBR_gg.R
 009d838a5547f47437a15029ac7138ee *R/plotGraph_gg.R
@@ -27,8 +27,10 @@ fa2b4695eeae0bf248165f4b91447c42 *man/LogisticModel.Rd
 feb71f24e69ad8687ad2e7388141ec55 *man/combinePlots_gg.Rd
 ab491eaff320f90bd4c52dfa23deb4f2 *man/dot-apply_legend.Rd
 00c796ed1bd188f9b737041166fe6644 *man/dot-axis_scaler.Rd
+2787edb20824755f660832a2d352f696 *man/dot-extract_legend.Rd
 e005b6465cabc8e362b6251eb16413de *man/dot-first_non_null.Rd
 78946503957359a986a29a6ff3366c49 *man/dot-gg_exametrika_palette.Rd
+6f52ecc16f0861f0a62e058c43cc4a16 *man/dot-gg_exametrika_sequential.Rd
 0045a70e615fabc9ed927b63e36b9fde *man/dot-plot_item_category.Rd
 415b5586a76f5fcc17416eb4a714da14 *man/dot-plot_membership_profile.Rd
 a676778bdb3512fb2933d1f01fbcdb76 *man/dot-plot_reference_vector.Rd
@@ -56,7 +58,7 @@ fe736b576d71c80952068107e7f3bfed *man/figures/README-unnamed-chunk-8-6.png
 532243d64d73385307259c7b8b08bd4c *man/figures/README-unnamed-chunk-8-7.png
 7346db7d175635eea55d9a013f572e36 *man/figures/README-unnamed-chunk-8-8.png
 678a1e15ad0ae92de0850dd4420e37d1 *man/figures/README-unnamed-chunk-8-9.png
-176e5995566ebd69fc9b0e3a27ba2761 *man/plotArray_gg.Rd
+3ad4931f04b2b7b17de9057a70ebc6ac *man/plotArray_gg.Rd
 9716522a28934ef0c7bb7cfef4a45c75 *man/plotCMP_gg.Rd
 3578edd6a85ca8eb0ae86f0a0e455650 *man/plotCRV_gg.Rd
 3a6f546f79af08522765b19af99bfce6 *man/plotDistractor_gg.Rd
@@ -97,7 +99,7 @@ ba07e24e824ab195e4b6962e28f3a687 *tests/testthat/test-LRAordinal-plots.R
 f65c2a473998b9b74d48fb0e5228a693 *tests/testthat/test-PolyBiclustering-plots.R
 56324fe9f67fa6c398368df9247be04b *tests/testthat/test-distractor-plots.R
 75edf93d3c88a1e9e769111c78a3b1a8 *tests/testthat/test-fixtures.R
-8e2e10b53893703b53a787cdd0adb23e *tests/testthat/test-plotArray_gg.R
+de5639f6c85d6a1f1dba43586bcd3a98 *tests/testthat/test-plotArray_gg.R
 c3fc95b68cacd4f9f47d89c4ce6e2ed6 *tests/testthat/test-utility-functions.R
 7ad290052cfd7d693978cf7eab656638 *tests/testthat/test-utility.R
 47a1f5f146dc72f243007c38c4bf1c10 *tests/testthat/test-validation.R
