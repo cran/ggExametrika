@@ -1,3 +1,100 @@
+# ggExametrika 1.3.0
+
+## Changes
+
+* `plotGraph_gg()` now builds the DAG from the adjacency matrices and the
+  edge table that exametrika returns (`adj`, `adj_list`, `all_edges`)
+  instead of reading the igraph objects `g`, `g_list` and `all_g` from the
+  fit. The plots are unchanged (the graphs are identical); the point is
+  that exametrika 3.0.0 will drop those igraph objects from its results,
+  and this version is ready for that. With an older exametrika whose BINET
+  fit has no `all_edges`, the igraph object is still used.
+
+## Bug Fixes
+
+* `plotGridSearch_gg()` no longer fails with "the condition has length > 1"
+  on a `GridSearch()` result from exametrika older than 2.3.0. Those results
+  have no `index` element, and `data$index` partially matched `index_vec` /
+  `index_matrix`; the fields are now read with exact matching. The `exametrika`
+  requirement in Suggests is raised to `>= 2.3.0`, the version whose
+  `GridSearch()` output the function is written for.
+
+* The examples and test fixtures no longer pass `dataType =` to
+  `exametrika::LRA()` and `exametrika::Biclustering()`. That argument never
+  existed (the response type is read from the data) and exametrika 2.3.0
+  now warns about unknown arguments. Because the argument was ignored, the
+  "nominal" and "rated" test fixtures had in fact been ordinal fits; they are
+  now built from `dataFormat(..., response.type = "nominal")` and from the
+  rated dataset `J21S300`, so the nominal and rated plot paths are tested
+  for the first time.
+
+* `plotLCD_gg()`, `plotLRD_gg()`, `plotCMP_gg()` and `plotRMP_gg()` now
+  read whether a biclustering fit has latent classes (`method = "B"`) or
+  latent ranks (`method = "R"`, Ranklustering) from the fit itself, as
+  exametrika records it in `msg`. Until now every `Biclustering()` object
+  was treated as a rank model, so `plotLCD_gg()` on a plain biclustering
+  fit warned that the data "was supposed to be visualized with The Latent
+  Rank Distribution" and labelled the axis "Latent Rank". The redirect
+  warning now fires in the right direction for both methods, and the same
+  holds for the nominal, ordinal and rated biclustering fits.
+
+## New Features
+
+* New `plotRankUpShift_gg()` and `plotRankOdds_gg()` for the ordinal
+  Ranklustering, the ggplot2 versions of the two plot types exametrika 2.3.0
+  adds (`plot(type = "RankUpShift")` and `plot(type = "RankOdds")`). The
+  first draws, per field, a heatmap of how much the probability of answering
+  each category or above rises at each rank step (rows are the steps, columns
+  the boundaries; a decrease, possible under GTM, takes the second colour).
+  The second draws box plots of the rank-up and rank-down odds by estimated
+  rank on a log axis, and also takes binary and rated Ranklustering fits.
+  With a fit from exametrika before 2.3.0, which returns neither
+  `RankUpShift` nor the ordinal odds, the values are computed from the field
+  reference profile and the memberships in the same way.
+
+* New `plotGridSearch_gg()` draws the fit index recorded by
+  `exametrika::GridSearch()`: one line against the number of classes or
+  ranks for LCA/LRA, one line per number of fields for Biclustering (or a
+  heat map with `style = "tile"`). Settings that left a class, rank or field
+  empty are open triangles, failed settings are left blank, and the optimum
+  is a large red point. This is the ggplot2 counterpart of `plot()` on a
+  `GridSearch` result in exametrika 2.3.0.
+
+* `combinePlots_gg()` gains `nr` and `nc` to set the number of rows and
+  columns of the grid (`combinePlots_gg(plots, 1:9, nr = 3, nc = 3)`), named
+  after the arguments of `plot.exametrika`. Either may be given alone; both
+  together are checked against the number of selected plots. The layout
+  stays automatic when neither is given.
+
+* `plotGraph_gg()` shades BNM item nodes by correct response rate by
+  default (new argument `fill_by = c("crr", "type")`), with a colour bar, so
+  easy and hard items can be told apart at a glance. The scale stretches over
+  the observed rates by default, which keeps differences visible when all
+  rates are close; `fill_limits = c(0, 1)` fixes it so plots from different
+  data sets share one scale. `fill_by = "type"` restores the single-colour
+  nodes; `colors` takes the low and high ends of the gradient. `show_legend`
+  now defaults to `NULL`, which shows the colour bar for this case and no
+  legend otherwise (unchanged for the other models).
+
+* `plotGraph_gg()` now draws hierarchical layouts top-to-bottom by default
+  (`direction = "TB"`): parent nodes sit at the top and arrows point down.
+  Use `direction = "BT"` for the previous bottom-to-top orientation.
+
+* `plotGraph_gg()` gains `show_isolated` (default `FALSE`) for BNM, LDLRA and
+  LDB. Nodes with no edges are left out of the graph by default, as LDLRA and
+  LDB already did, but are now listed in a caption under the plot
+  ("Isolated items: 5, 9") and in the message, so an unconnected item never
+  disappears without a trace. BNM used to draw them at the end of the top
+  layer; `show_isolated = TRUE` draws them in a row of their own below the
+  last layer instead.
+
+## Bug Fixes
+
+* `plotGraph_gg()` labelled items numbered 10 and above with their last digit
+  only ("Item10" showed as "0", "Item14" as "4"), so tests with ten or more
+  items had duplicate node labels. The lazy pattern used to extract the
+  number was read greedily by R's default regex engine; it now uses PCRE.
+
 # ggExametrika 1.2.0
 
 `plotArray_gg()` changes what it draws by default, so the version is raised

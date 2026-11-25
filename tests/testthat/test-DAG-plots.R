@@ -308,3 +308,103 @@ test_that("plotGraph_gg BINET: node sizes differ by type", {
     label = "Class nodes larger than Field nodes"
   )
 })
+
+test_that("plotGraph_gg shades BNM nodes by correct response rate", {
+  skip_if_not_installed("exametrika")
+  skip_if(is.null(fixture_BNM), "BNM fixture not available")
+
+  p <- plotGraph_gg(fixture_BNM)[[1]]
+  built <- ggplot2::ggplot_build(p)
+  pts <- built$data[[2]]
+  crr <- as.numeric(fixture_BNM$crr)
+  # One node per item, each filled by its own correct response rate
+  expect_equal(nrow(pts), length(crr))
+  expect_equal(length(unique(pts$fill)), length(unique(crr)))
+  # Higher rate -> darker fill on the default gradient
+  lum <- colSums(grDevices::col2rgb(pts$fill) * c(0.299, 0.587, 0.114))
+  node_crr <- p$data$crr
+  expect_true(cor(lum, node_crr) < 0)
+  # Scale follows the data by default; colour bar shown by default
+  expect_null(p$scales$get_scales("fill")$limits)
+  expect_false(identical(p$theme$legend.position, "none"))
+  p01 <- plotGraph_gg(fixture_BNM, fill_limits = c(0, 1))[[1]]
+  expect_equal(p01$scales$get_scales("fill")$limits, c(0, 1))
+  expect_error(plotGraph_gg(fixture_BNM, fill_limits = 1), "length 2")
+})
+
+test_that("plotGraph_gg puts parents on top by default", {
+  skip_if_not_installed("exametrika")
+  skip_if(is.null(fixture_BNM), "BNM fixture not available")
+
+  y_of <- function(p) stats::setNames(p$data$y, p$data$name)
+  edges <- igraph::as_edgelist(fixture_BNM$g)
+  y_tb <- y_of(plotGraph_gg(fixture_BNM)[[1]])
+  expect_true(all(y_tb[edges[, 1]] > y_tb[edges[, 2]]))
+  y_bt <- y_of(plotGraph_gg(fixture_BNM, direction = "BT")[[1]])
+  expect_true(all(y_bt[edges[, 1]] < y_bt[edges[, 2]]))
+})
+
+test_that("plotGraph_gg fill_by = 'type' keeps single-colour nodes", {
+  skip_if_not_installed("exametrika")
+  skip_if(is.null(fixture_BNM), "BNM fixture not available")
+
+  p <- plotGraph_gg(fixture_BNM, fill_by = "type")[[1]]
+  pts <- ggplot2::ggplot_build(p)$data[[2]]
+  expect_equal(length(unique(pts$fill)), 1)
+  expect_identical(p$theme$legend.position, "none")
+  expect_s3_class(plotGraph_gg(fixture_BNM, colors = c("white", "navy"))[[1]], "gg")
+  expect_error(plotGraph_gg(fixture_BNM, colors = "navy"), "two colors")
+})
+
+test_that("node labels keep every digit of the item number", {
+  expect_identical(
+    .dag_node_number(c("Item01", "Item10", "Item14", "Item100", "PHQ9", "abc")),
+    c("1", "10", "14", "100", "9", "abc")
+  )
+})
+
+test_that("isolated BNM nodes are dropped with a caption, or drawn below", {
+  skip_if_not_installed("exametrika")
+  # Item05 has no edges
+  DAG <- matrix(c("Item01", "Item02", "Item02", "Item03", "Item02", "Item04"),
+    ncol = 2, byrow = TRUE
+  )
+  g <- igraph::add_vertices(igraph::graph_from_data_frame(DAG), 1, name = "Item05")
+  res <- suppressMessages(exametrika::BNM(exametrika::J5S10, g = g))
+
+  expect_message(p <- plotGraph_gg(res)[[1]], "isolated node\\(s\\): 5")
+  expect_false("Item05" %in% p$data$name)
+  expect_identical(p$labels$caption, "Isolated items: 5")
+
+  p2 <- plotGraph_gg(res, show_isolated = TRUE)[[1]]
+  expect_true("Item05" %in% p2$data$name)
+  expect_null(p2$labels$caption)
+  y <- stats::setNames(p2$data$y, p2$data$name)
+  expect_true(y[["Item05"]] < min(y[setdiff(names(y), "Item05")]))
+})
+
+# exametrika 3.0.0 will drop the igraph objects from the fits; the plots
+# must come from the adjacency matrices / edge table alone.
+test_that("plotGraph_gg does not need the igraph objects in the fit", {
+  skip_if(is.null(fixture_BNM) || is.null(fixture_LDLRA) ||
+    is.null(fixture_LDB) || is.null(fixture_BINET))
+  skip_if(is.null(fixture_BINET$all_edges))
+  strip <- function(fit) {
+    fit$g <- NULL
+    fit$g_list <- NULL
+    fit$all_g <- NULL
+    fit
+  }
+  for (fit in list(fixture_BNM, fixture_LDLRA, fixture_LDB, fixture_BINET)) {
+    with_g <- suppressMessages(plotGraph_gg(fit))
+    without_g <- suppressMessages(plotGraph_gg(strip(fit)))
+    expect_equal(length(without_g), length(with_g))
+    for (k in seq_along(with_g)) {
+      expect_s3_class(without_g[[k]], "ggplot")
+      expect_equal(
+        ggplot2::layer_data(without_g[[k]], 2),
+        ggplot2::layer_data(with_g[[k]], 2)
+      )
+    }
+  }
+})
